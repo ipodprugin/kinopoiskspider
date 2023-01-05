@@ -1,12 +1,11 @@
-from urllib.parse import urlencode
-from dotenv import load_dotenv
-
-import scrapy
 import os
-
-load_dotenv()
+import scrapy
+from urllib.parse import urlencode
+from kinopoiskspider.exceptions import MissingEnvironmentVariable
 
 API_KEY = os.getenv('API_KEY')
+if not API_KEY:
+    raise MissingEnvironmentVariable('Set API_KEY env variable in Dockerfile')
 
 
 def get_proxy_url(url):
