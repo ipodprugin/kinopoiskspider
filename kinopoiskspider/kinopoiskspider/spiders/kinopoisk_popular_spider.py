@@ -1,22 +1,28 @@
+from urllib.parse import urlencode
+from dotenv import load_dotenv
+
 import scrapy
+import os
+
+load_dotenv()
+
+API_KEY = os.getenv('API_KEY')
+
+
+def get_proxy_url(url):
+    payload = {'api_key': API_KEY, 'url': url}
+    proxy_url = 'https://proxy.scrapeops.io/v1/?' + urlencode(payload)
+    return proxy_url
 
 
 class KinopoiskPopularSpider(scrapy.Spider):
     name = 'kinopoisk_popular'
-    start_urls = ['https://www.kinopoisk.ru/lists/movies/popular/']
-    custom_settings = dict(
-        DOWNLOADER_MIDDLEWARES={
-        'scrapy.downloadermiddlewares.useragent.UserAgentMiddleware': None,
-        'scrapy.downloadermiddlewares.retry.RetryMiddleware': None,
-        'scrapy_fake_useragent.middleware.RandomUserAgentMiddleware': 400,
-        'scrapy_fake_useragent.middleware.RetryUserAgentMiddleware': 401,
-        },
-        FAKEUSERAGENT_PROVIDERS=[
-        'scrapy_fake_useragent.providers.FakeUserAgentProvider',
-        'scrapy_fake_useragent.providers.FakerProvider',
-        'scrapy_fake_useragent.providers.FixedUserAgentProvider',
-        ],
-    )
+
+
+    def start_requests(self):
+        start_url = 'https://www.kinopoisk.ru/lists/movies/popular/'
+        yield scrapy.Request(url=get_proxy_url(start_url), callback=self.parse)
+
 
     def parse(self, response):
         for film in response.css('div.styles_root__ti07r'):
@@ -24,8 +30,11 @@ class KinopoiskPopularSpider(scrapy.Spider):
                 'ranking_position': film.css('.styles_position__TDe4E::text').get(),
                 'russian_title': film.css('.styles_mainTitle__IFQyZ::text').get(),
                 'english_title': film.css('.desktop-list-main-info_secondaryTitle__ighTt::text').get(),
-                'release_year': film.css('.desktop-list-main-info_secondaryText__M_aus').re(r'\d{4}')[0],
+                'release_year': film.css('.desktop-list-main-info_secondaryText__M_aus').re_first(r'\d{4}'),
                 'kinopoisk_value': film.css('.styles_kinopoiskValue__9qXjg::text').get(),
             }
 
-        yield from response.follow_all(css='div.styles_root__AT6_5 styles_root__RoFSb a', callback=self.parse)
+        next_page = response.css('a.styles_end__aEsmB.styles_start__UvE6T ::attr(href)').get()
+        if next_page:
+            next_page_url = 'https://www.kinopoisk.ru/' + next_page
+            yield response.follow(get_proxy_url(next_page_url), callback=self.parse)
